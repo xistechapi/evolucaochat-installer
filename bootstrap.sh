@@ -20,6 +20,11 @@ bootstrap_error() {
   return 1
 }
 
+use_terminal_input() {
+  [[ -r /dev/tty ]] || bootstrap_error 'execute o instalador em um terminal interativo'
+  exec </dev/tty
+}
+
 download_public_installer() {
   local destination="$1"
   local staging relative_path target
@@ -58,6 +63,7 @@ download_public_installer() {
 main() {
   local install_dir
   [[ "${EUID:-$(id -u)}" -eq 0 ]] || bootstrap_error 'execute com sudo'
+  use_terminal_input
   install_dir="$(mktemp -d "${TMPDIR:-/tmp}/evolucaochat-installer-run.XXXXXX")"
   rm -rf -- "$install_dir"
   download_public_installer "$install_dir"
