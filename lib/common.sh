@@ -74,6 +74,27 @@ log_step_output() {
   done < "$output_file"
 }
 
+show_step_failure() {
+  local name="$1"
+  local guidance='Revise os dados informados e tente novamente.'
+
+  case "$name" in
+    activation_and_download)
+      guidance='Falha ao validar o acesso a versao. Confira o e-mail e a chave de licenca.'
+      ;;
+    dns)
+      guidance='Confira se os tres dominios apontam para o IP desta VPS e tente novamente.'
+      ;;
+    docker)
+      guidance='Nao foi possivel preparar o Docker. Verifique a conexao da VPS e tente novamente.'
+      ;;
+  esac
+
+  printf '\nERRO: a etapa "%s" nao foi concluida.\n' "$name" >&2
+  printf '%s\n' "$guidance" >&2
+  printf 'Consulte o diagnostico protegido em %s\n' "$LOG_FILE" >&2
+}
+
 run_step() {
   local name="$1"
   local function_name="$2"
@@ -108,6 +129,7 @@ run_step() {
     rm -f "$output_file"
     state_set "$name" "failed:$exit_code"
     log "step $name failed with exit code $exit_code"
+    show_step_failure "$name"
     return "$exit_code"
   fi
 }

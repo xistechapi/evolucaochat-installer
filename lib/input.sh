@@ -47,34 +47,61 @@ validate_portainer_password_pair() {
   local password="$1"
   local confirmation="$2"
 
-  [[ "$password" == "$confirmation" ]] || input_error 'senhas do Portainer nao conferem'
-  [[ ${#password} -ge 12 ]] || input_error 'senha do Portainer fraca'
-  [[ "$password" =~ [[:upper:]] ]] || input_error 'senha do Portainer fraca'
-  [[ "$password" =~ [[:lower:]] ]] || input_error 'senha do Portainer fraca'
-  [[ "$password" =~ [[:digit:]] ]] || input_error 'senha do Portainer fraca'
-  [[ "$password" =~ [^[:alnum:]] ]] || input_error 'senha do Portainer fraca'
+  if [[ "$password" != "$confirmation" ]]; then
+    printf '%s' 'as senhas nao conferem'
+    return 1
+  fi
+  if (( ${#password} < 12 )); then
+    printf '%s' 'deve ter ao menos 12 caracteres'
+    return 1
+  fi
+  if [[ ! "$password" =~ [[:upper:]] ]]; then
+    printf '%s' 'inclua uma letra maiuscula'
+    return 1
+  fi
+  if [[ ! "$password" =~ [[:lower:]] ]]; then
+    printf '%s' 'inclua uma letra minuscula'
+    return 1
+  fi
+  if [[ ! "$password" =~ [[:digit:]] ]]; then
+    printf '%s' 'inclua um numero'
+    return 1
+  fi
+  if [[ ! "$password" =~ [^[:alnum:]] ]]; then
+    printf '%s' 'inclua um caractere especial'
+    return 1
+  fi
 }
 
 collect_portainer_password() {
-  local password confirmation
+  local password confirmation validation_error
 
-  read -r -s -p 'Senha do Portainer: ' password || {
+  while true; do
+    password=''
+    confirmation=''
+
+    read -r -s -p 'Senha do Portainer: ' password || {
+      register_secret "$password"
+      input_error 'senha do Portainer obrigatoria'
+    }
     register_secret "$password"
-    input_error 'senha do Portainer obrigatoria'
-  }
-  register_secret "$password"
-  printf '\n' >&2
+    printf '\n' >&2
 
-  read -r -s -p 'Confirme a senha do Portainer: ' confirmation || {
+    read -r -s -p 'Confirme a senha do Portainer: ' confirmation || {
+      register_secret "$confirmation"
+      input_error 'confirmacao da senha do Portainer obrigatoria'
+    }
     register_secret "$confirmation"
-    input_error 'confirmacao da senha do Portainer obrigatoria'
-  }
-  register_secret "$confirmation"
-  printf '\n' >&2
+    printf '\n' >&2
 
-  validate_portainer_password_pair "$password" "$confirmation"
-  PORTAINER_ADMIN_PASSWORD="$password"
-  export PORTAINER_ADMIN_PASSWORD
+    if validation_error="$(validate_portainer_password_pair "$password" "$confirmation")"; then
+      PORTAINER_ADMIN_PASSWORD="$password"
+      export PORTAINER_ADMIN_PASSWORD
+      return 0
+    fi
+
+    printf 'Senha do Portainer invalida: %s.\nTente novamente.\n\n' "$validation_error" >&2
+  done
 }
 
 collect_inputs() {
