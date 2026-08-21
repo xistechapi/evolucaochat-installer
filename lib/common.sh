@@ -76,7 +76,9 @@ log_step_output() {
 
 show_step_failure() {
   local name="$1"
+  local output_file="${2:-}"
   local guidance='Revise os dados informados e tente novamente.'
+  local line
 
   case "$name" in
     activation_and_download)
@@ -92,6 +94,12 @@ show_step_failure() {
 
   printf '\nERRO: a etapa "%s" nao foi concluida.\n' "$name" >&2
   printf '%s\n' "$guidance" >&2
+  if [[ -n "$output_file" && -s "$output_file" ]]; then
+    printf '\nDetalhes tecnicos (dados sensiveis ocultos):\n' >&2
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      printf '%s\n' "$(redact "$line")" >&2
+    done < <(tail -n 30 "$output_file")
+  fi
   printf 'Consulte o diagnostico protegido em %s\n' "$LOG_FILE" >&2
 }
 
@@ -126,10 +134,10 @@ run_step() {
     return 0
   else
     log_step_output "$name" "$output_file"
-    rm -f "$output_file"
     state_set "$name" "failed:$exit_code"
     log "step $name failed with exit code $exit_code"
-    show_step_failure "$name"
+    show_step_failure "$name" "$output_file"
+    rm -f "$output_file"
     return "$exit_code"
   fi
 }

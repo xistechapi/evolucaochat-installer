@@ -117,18 +117,18 @@ collect_inputs() {
   [[ -n "$license_key_input" ]] || input_error 'chave de licenca obrigatoria'
   LICENSE_KEY="$license_key_input"
 
-  read -r -p 'E-mail ACME: ' acme_email_input || input_error 'e-mail ACME obrigatorio'
+  read -r -p 'E-mail ACME (para emitir e renovar o certificado HTTPS): ' acme_email_input || input_error 'e-mail ACME obrigatorio'
   ACME_EMAIL="$(normalize_email "$acme_email_input")" || input_error 'e-mail ACME invalido'
 
-  read -r -p 'Dominio do painel: ' domain_app_input || input_error 'dominio do painel obrigatorio'
+  read -r -p 'Dominio do painel (ex.: app.seudominio.com.br): ' domain_app_input || input_error 'dominio do painel obrigatorio'
   validate_domain "$domain_app_input"
   DOMAIN_APP="${domain_app_input,,}"
 
-  read -r -p 'Dominio da API: ' domain_api_input || input_error 'dominio da API obrigatorio'
+  read -r -p 'Dominio da API (ex.: api.seudominio.com.br): ' domain_api_input || input_error 'dominio da API obrigatorio'
   validate_domain "$domain_api_input"
   DOMAIN_API="${domain_api_input,,}"
 
-  read -r -p 'Dominio do Portainer: ' domain_portainer_input || input_error 'dominio do Portainer obrigatorio'
+  read -r -p 'Dominio do Portainer (ex.: portainer.seudominio.com.br): ' domain_portainer_input || input_error 'dominio do Portainer obrigatorio'
   validate_domain "$domain_portainer_input"
   DOMAIN_PORTAINER="${domain_portainer_input,,}"
 

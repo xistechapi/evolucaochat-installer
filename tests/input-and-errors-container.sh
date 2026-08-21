@@ -20,7 +20,7 @@ export LOG_FILE="$test_root/installer.log"
 source "$test_root/repo/lib/common.sh"
 source "$test_root/repo/lib/input.sh"
 
-inputs=('curta' 'curta' 'SenhaForte!2026' 'SenhaForte!2026')
+inputs=('SenhaForte!2026' 'SenhaDiferente!2026' 'curta' 'curta' 'SenhaForte!2026' 'SenhaForte!2026')
 input_index=0
 read() {
   local target="${!#}"
@@ -33,11 +33,19 @@ collect_portainer_password 2>"$password_output_file"
 password_output="$(cat "$password_output_file")"
 unset -f read
 [[ "$PORTAINER_ADMIN_PASSWORD" == 'SenhaForte!2026' ]]
+[[ "$password_output" == *'Senha do Portainer invalida: as senhas nao conferem.'* ]]
 [[ "$password_output" == *'Senha do Portainer invalida: deve ter ao menos 12 caracteres.'* ]]
 [[ "$password_output" == *'Tente novamente.'* ]]
 
+grep -Fq 'E-mail ACME (para emitir e renovar o certificado HTTPS): ' "$test_root/repo/lib/input.sh"
+grep -Fq 'Dominio do painel (ex.: app.seudominio.com.br): ' "$test_root/repo/lib/input.sh"
+grep -Fq 'Dominio da API (ex.: api.seudominio.com.br): ' "$test_root/repo/lib/input.sh"
+grep -Fq 'Dominio do Portainer (ex.: portainer.seudominio.com.br): ' "$test_root/repo/lib/input.sh"
+
+register_secret 'segredo-nao-mostrar'
+
 failing_step() {
-  printf 'falha simulada de acesso\n' >&2
+  printf 'falha simulada de acesso com segredo-nao-mostrar\n' >&2
   return 40
 }
 
@@ -50,6 +58,11 @@ set -e
 [[ "$step_output" == *'ERRO: a etapa "activation_and_download" nao foi concluida.'* ]]
 [[ "$step_output" == *"Consulte o diagnostico protegido em $LOG_FILE"* ]]
 [[ "$step_output" == *'Falha ao validar o acesso a versao. Confira o e-mail e a chave de licenca.'* ]]
+[[ "$step_output" == *'Detalhes tecnicos (dados sensiveis ocultos):'* ]]
+[[ "$step_output" == *'falha simulada de acesso com [REDACTED]'* ]]
+[[ "$step_output" != *'segredo-nao-mostrar'* ]]
+grep -Fq 'falha simulada de acesso com [REDACTED]' "$LOG_FILE"
+! grep -Fq 'segredo-nao-mostrar' "$LOG_FILE"
 
 printf 'input and terminal errors: PASS\n'
 BASH
