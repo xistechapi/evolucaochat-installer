@@ -84,7 +84,22 @@ step_deploy_infra() { deploy_infrastructure; }
 step_deploy_app() { deploy_application; }
 step_verify() { verify_deployment; }
 step_notify_completion() {
-  printf 'Instalacao concluida. Credenciais protegidas em %s\n' "$CREDENTIALS_FILE"
+  log "instalacao concluida; credenciais protegidas em $CREDENTIALS_FILE"
+}
+show_completion_message() {
+  printf '\n========================================\n'
+  printf ' INSTALACAO CONCLUIDA COM SUCESSO\n'
+  printf '========================================\n'
+  printf 'Painel: https://%s\n' "$DOMAIN_APP"
+  printf 'API: https://%s\n' "$DOMAIN_API"
+  printf 'Portainer: https://%s\n' "$DOMAIN_PORTAINER"
+  printf 'Usuario do Portainer: admin\n'
+  printf 'Credenciais protegidas em %s\n' "$CREDENTIALS_FILE"
+  printf 'Voce pode fechar este terminal.\n'
+}
+finalize_installation() {
+  run_step notify_completion step_notify_completion
+  show_completion_message
 }
 
 initialize_installer_paths() {
@@ -133,7 +148,7 @@ main() {
   state_set verify pending
   run_step verify step_verify
   state_set notify_completion pending
-  run_step notify_completion step_notify_completion
+  finalize_installation
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
