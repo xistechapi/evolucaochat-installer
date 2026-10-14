@@ -56,11 +56,13 @@ load_release_images() {
   zstd -dc "$bundle" | docker load >/dev/null
   docker image inspect "evolucaochat-api:$RELEASE_VERSION" >/dev/null 2>&1 || deploy_error 'imagem da API ausente apos o carregamento'
   docker image inspect "evolucaochat-painel:$RELEASE_VERSION" >/dev/null 2>&1 || deploy_error 'imagem do painel ausente apos o carregamento'
+  docker image inspect "evolucaochat-updater:$RELEASE_VERSION" >/dev/null 2>&1 || deploy_error 'imagem do atualizador ausente apos o carregamento'
 }
 
 release_images_available() {
   docker image inspect "evolucaochat-api:$RELEASE_VERSION" >/dev/null 2>&1 &&
-    docker image inspect "evolucaochat-painel:$RELEASE_VERSION" >/dev/null 2>&1
+    docker image inspect "evolucaochat-painel:$RELEASE_VERSION" >/dev/null 2>&1 &&
+    docker image inspect "evolucaochat-updater:$RELEASE_VERSION" >/dev/null 2>&1
 }
 
 compose_file() {
@@ -84,6 +86,19 @@ wait_for_url() {
     sleep "$DEPLOY_WAIT_INTERVAL"
   done
   deploy_error "$label nao respondeu com TLS valido dentro do prazo"
+}
+
+wait_for_updater_health() {
+  local attempt container_id status
+  for (( attempt=1; attempt<=DEPLOY_WAIT_ATTEMPTS; attempt++ )); do
+    container_id="$(compose_file app.compose.yml ps -q evolucaochat-updater)"
+    if [[ -n "$container_id" ]]; then
+      status="$(docker inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)"
+      [[ "$status" == healthy ]] && return 0
+    fi
+    sleep "$DEPLOY_WAIT_INTERVAL"
+  done
+  deploy_error 'atualizador nao ficou saudavel dentro do prazo'
 }
 
 deploy_infrastructure() {
@@ -134,6 +149,8 @@ bootstrap_chatwoot() {
 deploy_application() {
   compose_file app.compose.yml up -d postgres redis chatwoot-rails
   bootstrap_chatwoot
+  compose_file app.compose.yml up -d evolucaochat-updater
+  wait_for_updater_health
   compose_file app.compose.yml up -d api painel evolution chatwoot-sidekiq
   wait_for_url "https://$DOMAIN_APP" 'Painel'
   wait_for_url "https://$DOMAIN_API/api" 'API'
@@ -142,6 +159,7 @@ deploy_application() {
 verify_deployment() {
   compose_file infra.compose.yml ps
   compose_file app.compose.yml ps
+  wait_for_updater_health
   wait_for_url "https://$DOMAIN_PORTAINER" 'Portainer'
   wait_for_url "https://$DOMAIN_APP" 'Painel'
   wait_for_url "https://$DOMAIN_API/api" 'API'

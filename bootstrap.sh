@@ -5,6 +5,7 @@ umask 077
 readonly PUBLIC_INSTALLER_BASE_URL='https://raw.githubusercontent.com/xistechapi/evolucaochat-installer/main'
 readonly -a PUBLIC_INSTALLER_FILES=(
   install.sh
+  enable-updater.sh
   lib/common.sh
   lib/input.sh
   lib/preflight.sh
