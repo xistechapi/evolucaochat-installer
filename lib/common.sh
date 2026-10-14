@@ -5,6 +5,37 @@ set -Eeuo pipefail
 : "${LOG_FILE:=/var/log/evolucaochat-installer.log}"
 REGISTERED_SECRETS=()
 
+local_docker_storage_root() {
+  local endpoint storage_root canonical
+  endpoint="${DOCKER_HOST:-$(docker context inspect --format '{{(index .Endpoints "docker").Host}}')}" || return 1
+  [[ "$endpoint" == unix:///var/run/docker.sock || "$endpoint" == unix:///run/docker.sock ]] || return 1
+  storage_root="$(docker info --format '{{.DockerRootDir}}')" || return 1
+  [[ "$storage_root" =~ ^/[A-Za-z0-9._/-]+$ && "$storage_root" != / && -d "$storage_root" && ! -L "$storage_root" ]] || return 1
+  canonical="$(readlink -f -- "$storage_root")" || return 1
+  [[ "$canonical" == "$storage_root" ]] || return 1
+  printf '%s\n' "$storage_root"
+}
+
+local_containerd_storage_root() {
+  local service dump root_line storage_root canonical
+  service="$(systemctl show containerd --property=ExecStart --value)" || return 1
+  # Support the standard rootful system service, not custom daemon arguments/pools.
+  [[ "$service" == *'argv[]=/usr/bin/containerd ;'* ]] || return 1
+  dump="$(containerd config dump)" || return 1
+  # Custom snapshotter roots and imported pool configurations need assisted review.
+  local override
+  while IFS= read -r override; do
+    override="$(sed -E "s/^[^=]*=[[:space:]]*//; s/[\"']//g; s/[[:space:]]//g" <<< "$override")"
+    [[ -z "$override" ]] || return 1
+  done < <(grep -E '^[[:space:]]*(root_path|pool_name)[[:space:]]*=' <<< "$dump" || true)
+  root_line="$(awk '/^[[:space:]]*\[/ {exit} /^[[:space:]]*root[[:space:]]*=/ {print}' <<< "$dump")"
+  storage_root="$(sed -E "s/^[[:space:]]*root[[:space:]]*=[[:space:]]*[\"']/ /; s/[\"'][[:space:]]*$//; s/^ //" <<< "$root_line")"
+  [[ "$storage_root" =~ ^/[A-Za-z0-9._/-]+$ && "$storage_root" != / && -d "$storage_root" && ! -L "$storage_root" ]] || return 1
+  canonical="$(readlink -f -- "$storage_root")" || return 1
+  [[ "$canonical" == "$storage_root" ]] || return 1
+  printf '%s\n' "$storage_root"
+}
+
 die() {
   local code="$1"
   local message="$2"

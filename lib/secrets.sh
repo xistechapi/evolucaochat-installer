@@ -6,6 +6,7 @@ set -Eeuo pipefail
 : "${VERSIONS_FILE:=$INSTALL_ROOT/versions.env}"
 : "${SECRETS_DIR:=$INSTALL_ROOT/secrets}"
 : "${CREDENTIALS_FILE:=$INSTALL_ROOT/credentials.txt}"
+: "${RELEASE_PUBLIC_KEY_SOURCE:=$INSTALLER_DIR/keys/release-public.pem}"
 
 secrets_error() {
   local message="$1"
@@ -67,7 +68,7 @@ register_environment_secrets() {
     POSTGRES_PASSWORD REDIS_PASSWORD CHATWOOT_SECRET_KEY_BASE \
     CHATWOOT_PLATFORM_TOKEN EVOLUTION_API_KEY EVOLUTION_LABEL_WEBHOOK_SECRET \
     JWT_SECRET CREDENTIALS_ENCRYPTION_KEY AGENT_RUNTIME_WEBHOOK_SECRET \
-    MCP_APPROVAL_SIGNING_KEY; do
+    MCP_APPROVAL_SIGNING_KEY SYSTEM_UPDATER_SHARED_SECRET; do
     value="$(existing_env_value "$key")"
     register_secret "$value"
   done
@@ -81,9 +82,18 @@ generate_environment() {
   local postgres_password redis_password chatwoot_secret evolution_key
   local evolution_webhook jwt_secret credentials_key runtime_webhook mcp_signing
   local platform_token portainer_admin buyer_email acme_email temp_env temp_credentials
+  local updater_shared_secret temp_public_key
 
   [[ -s "$VERSIONS_FILE" ]] || secrets_error 'versions.env ausente; extraia o pacote de deployment primeiro'
   [[ -n "${RELEASE_VERSION:-}" ]] || secrets_error 'versao do release ausente'
+  local docker_storage_root prior_docker_storage_root
+  docker_storage_root="$(local_docker_storage_root)" || secrets_error 'armazenamento do Docker local nao pode ser identificado com seguranca'
+  prior_docker_storage_root="$(existing_env_value SYSTEM_UPDATER_DOCKER_ROOT)"
+  [[ -z "$prior_docker_storage_root" || "$prior_docker_storage_root" == "$docker_storage_root" ]] || secrets_error 'armazenamento do Docker mudou; configuracao assistida necessaria'
+  local containerd_storage_root prior_containerd_storage_root
+  containerd_storage_root="$(local_containerd_storage_root)" || secrets_error 'armazenamento do containerd local requer configuracao assistida'
+  prior_containerd_storage_root="$(existing_env_value SYSTEM_UPDATER_CONTAINERD_ROOT)"
+  [[ -z "$prior_containerd_storage_root" || "$prior_containerd_storage_root" == "$containerd_storage_root" ]] || secrets_error 'armazenamento do containerd mudou; configuracao assistida necessaria'
 
   mkdir -p "$INSTALL_ROOT" "$SECRETS_DIR"
   chmod 700 "$INSTALL_ROOT" "$SECRETS_DIR"
@@ -97,6 +107,7 @@ generate_environment() {
   credentials_key="$(preserved_or_generated CREDENTIALS_ENCRYPTION_KEY base64_secret 32)"
   runtime_webhook="$(preserved_or_generated AGENT_RUNTIME_WEBHOOK_SECRET hex_secret 32)"
   mcp_signing="$(preserved_or_generated MCP_APPROVAL_SIGNING_KEY hex_secret 32)"
+  updater_shared_secret="$(preserved_or_generated SYSTEM_UPDATER_SHARED_SECRET hex_secret 32)"
   platform_token="$(existing_env_value CHATWOOT_PLATFORM_TOKEN)"
   portainer_admin="$(portainer_password)"
   buyer_email="$(escape_compose_env_value "$BUYER_EMAIL")"
@@ -104,7 +115,18 @@ generate_environment() {
   register_secret \
     "$postgres_password" "$redis_password" "$chatwoot_secret" "$evolution_key" \
     "$evolution_webhook" "$jwt_secret" "$credentials_key" "$runtime_webhook" \
-    "$mcp_signing" "$platform_token" "$portainer_admin"
+    "$mcp_signing" "$updater_shared_secret" "$platform_token" "$portainer_admin"
+
+  [[ -f "$RELEASE_PUBLIC_KEY_SOURCE" && ! -L "$RELEASE_PUBLIC_KEY_SOURCE" ]] || secrets_error 'chave publica do release ausente'
+  if [[ -e "$SECRETS_DIR/release-public.pem" || -L "$SECRETS_DIR/release-public.pem" ]]; then
+    [[ -f "$SECRETS_DIR/release-public.pem" && ! -L "$SECRETS_DIR/release-public.pem" ]] || secrets_error 'chave publica instalada insegura'
+    cmp -s "$RELEASE_PUBLIC_KEY_SOURCE" "$SECRETS_DIR/release-public.pem" || secrets_error 'chave publica instalada diverge da chave confiavel'
+  else
+    temp_public_key="$(mktemp "$SECRETS_DIR/.release-public.XXXXXX")"
+    cp -- "$RELEASE_PUBLIC_KEY_SOURCE" "$temp_public_key"
+    chmod 644 "$temp_public_key"
+    mv -f "$temp_public_key" "$SECRETS_DIR/release-public.pem"
+  fi
 
   temp_env="$(mktemp "$INSTALL_ROOT/.env.XXXXXX")"
   cat > "$temp_env" <<EOF
@@ -169,6 +191,9 @@ AGENT_RUNTIME_WEBHOOK_RATE_LIMIT_MAX=120
 AGENT_RUNTIME_WEBHOOK_RATE_LIMIT_WINDOW_MS=60000
 AGENT_RUNTIME_WEBHOOK_RATE_LIMIT_MAX_KEYS=1000
 MCP_APPROVAL_SIGNING_KEY=$mcp_signing
+SYSTEM_UPDATER_SHARED_SECRET=$updater_shared_secret
+SYSTEM_UPDATER_DOCKER_ROOT=$docker_storage_root
+SYSTEM_UPDATER_CONTAINERD_ROOT=$containerd_storage_root
 MCP_OAUTH_REDIRECT_URI=https://$DOMAIN_API/api/mcp/oauth/callback
 MCP_OAUTH_PANEL_BASE_URL=https://$DOMAIN_APP
 MCP_OAUTH_TIMEOUT_MS=20000
@@ -186,6 +211,7 @@ S3_AWS_PROFILE=
 VITE_API_URL=https://$DOMAIN_API/api
 EVOLUCAOCHAT_API_IMAGE=evolucaochat-api:$RELEASE_VERSION
 EVOLUCAOCHAT_PANEL_IMAGE=evolucaochat-painel:$RELEASE_VERSION
+EVOLUCAOCHAT_UPDATER_IMAGE=evolucaochat-updater:$RELEASE_VERSION
 PORTAINER_ADMIN_PASSWORD_FILE=$SECRETS_DIR/portainer_admin_password
 EOF
   chmod 600 "$temp_env"

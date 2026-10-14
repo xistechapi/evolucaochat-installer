@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-: "${INSTALLER_VERSION:=1.0.0}"
+: "${INSTALLER_VERSION:=1.1.0}"
 : "${INSTALL_ROOT:=/opt/evolucaochat}"
 : "${CACHE_DIR:=$INSTALL_ROOT/cache}"
 : "${RELEASE_PUBLIC_KEY:=$INSTALLER_DIR/keys/release-public.pem}"
