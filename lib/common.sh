@@ -134,27 +134,76 @@ show_step_failure() {
   printf 'Consulte o diagnostico protegido em %s\n' "$LOG_FILE" >&2
 }
 
+step_description() {
+  case "$1" in
+    dns) printf 'Verificando os dominios e o IP da VPS' ;;
+    docker) printf 'Preparando o Docker e seus pacotes' ;;
+    activation_and_download) printf 'Validando a licenca e baixando a versao autorizada' ;;
+    prepare_deployment) printf 'Preparando os arquivos de instalacao' ;;
+    secrets) printf 'Configurando as credenciais com seguranca' ;;
+    load_images) printf 'Carregando as imagens do sistema' ;;
+    deploy_infra) printf 'Instalando a stack de infraestrutura e o Portainer' ;;
+    deploy_app) printf 'Instalando a stack do aplicativo e aguardando os servicos' ;;
+    verify) printf 'Verificando os servicos e os certificados HTTPS' ;;
+    notify_completion) printf 'Finalizando a instalacao' ;;
+    *) printf 'Executando uma etapa da instalacao' ;;
+  esac
+}
+
+step_progress_loop() {
+  # UI only: never read the step output, credentials or log in this process.
+  trap - ERR
+  local description="$1" parent_pid="$2" started=$SECONDS elapsed sleeper=''
+  local interval="${INSTALLER_PROGRESS_INTERVAL:-15}"
+  [[ "$interval" =~ ^[1-9][0-9]{0,2}$ ]] || interval=15
+  trap 'if [[ -n "$sleeper" ]]; then kill "$sleeper" 2>/dev/null || :; wait "$sleeper" 2>/dev/null || :; fi; exit 0' TERM INT
+  while kill -0 "$parent_pid" 2>/dev/null; do
+    sleep "$interval" &
+    sleeper=$!
+    wait "$sleeper" || return 0
+    sleeper=''
+    kill -0 "$parent_pid" 2>/dev/null || return 0
+    elapsed=$((SECONDS - started))
+    printf '[AGUARDE] %s | %02d:%02d decorridos. Nao feche este terminal.\n' \
+      "$description" "$((elapsed / 60))" "$((elapsed % 60))" >&2 || return 0
+  done
+}
+
 run_step() {
   local name="$1"
   local function_name="$2"
-  local current_state exit_code output_file had_errexit=0
+  local current_state exit_code output_file had_errexit=0 description progress_pid parent_pid="$BASHPID" err_trap
 
+  description="$(step_description "$name")"
   current_state="$(state_get "$name")"
   if [[ "$current_state" == completed ]]; then
     log "step $name already completed; skipping"
+    printf '[OK] Etapa ja concluida: %s.\n' "$description" >&2
     return 0
   fi
 
   state_set "$name" running
   log "step $name started"
   output_file="$(mktemp "$(dirname "$STATE_FILE")/.step-output.XXXXXX")"
+  printf '[INICIANDO] %s.\n' "$description" >&2
+  step_progress_loop "$description" "$parent_pid" &
+  progress_pid=$!
   [[ $- == *e* ]] && had_errexit=1
+  # set +e alone does not suppress the entrypoint's exiting ERR handler.
+  # Keep that handler inside the worker, but finish cleanup/state in the parent
+  # before returning the failure to the entrypoint. trap -p is trusted shell code.
+  err_trap="$(trap -p ERR)"
+  trap - ERR
   set +e
   (
+    [[ -z "$err_trap" ]] || eval "$err_trap"
     set -Eeuo pipefail
     "$function_name"
   ) > "$output_file" 2>&1
   exit_code=$?
+  kill "$progress_pid" 2>/dev/null || :
+  wait "$progress_pid" 2>/dev/null || :
+  [[ -z "$err_trap" ]] || eval "$err_trap"
   (( had_errexit == 1 )) && set -e
 
   if (( exit_code == 0 )); then
@@ -162,6 +211,7 @@ run_step() {
     rm -f "$output_file"
     state_set "$name" completed
     log "step $name completed"
+    printf '[OK] Concluido: %s.\n' "$description" >&2
     return 0
   else
     log_step_output "$name" "$output_file"

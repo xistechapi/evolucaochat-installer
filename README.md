@@ -13,6 +13,13 @@ compra, pede à central `downloads.evolucaochat.com.br` uma release autorizada,
 baixa os cinco artefatos temporários por HTTPS e valida assinatura/checksums
 antes de instalar Docker, Traefik, Portainer e o EvolucaoChat.
 
+Depois da confirmação da senha, o terminal informa a etapa atual e exibe um
+aviso de espera a cada 15 segundos durante etapas demoradas, com o tempo
+decorrido naquela etapa. O tempo depende da VPS e da conexão; não há
+porcentagem nem prazo fixo de conclusão. Não feche o terminal até a mensagem
+de conclusão. Detalhes técnicos e credenciais continuam fora desses avisos,
+e o diagnóstico protegido mantém a ocultação dos segredos.
+
 ## Atualização pelo sistema
 
 O instalador 1.1.0 prepara o serviço privado de atualização, seu segredo de

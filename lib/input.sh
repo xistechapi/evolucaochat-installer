@@ -137,4 +137,6 @@ collect_inputs() {
   fi
 
   collect_portainer_password
+  printf '\nPreparando a instalacao. Pode levar alguns minutos, dependendo do servidor e da conexao.\n' >&2
+  printf 'Nao feche este terminal. A etapa atual e o tempo decorrido serao exibidos abaixo.\n\n' >&2
 }
