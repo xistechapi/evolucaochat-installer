@@ -14,8 +14,9 @@ source "$INSTALLER_DIR/lib/deploy.sh"
 on_error() {
   local exit_code="$1"
   local line="$2"
+  trap - ERR
   log "installer failed with exit code $exit_code at line $line"
-  printf '\nERRO: a instalacao foi interrompida (codigo %s).\n' "$exit_code" >&2
+  printf '\nERRO: a instalacao foi interrompida (codigo %s, linha %s).\n' "$exit_code" "$line" >&2
   printf 'Consulte o diagnostico protegido em %s\n' "$LOG_FILE" >&2
   exit "$exit_code"
 }
