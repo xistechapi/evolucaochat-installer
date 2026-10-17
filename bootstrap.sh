@@ -63,7 +63,7 @@ download_public_installer() {
 
 main() {
   local install_dir
-  [[ "${EUID:-$(id -u)}" -eq 0 ]] || bootstrap_error 'execute com sudo'
+  [[ "$(id -u)" -eq 0 ]] || bootstrap_error 'execute com sudo'
   use_terminal_input
   install_dir="$(mktemp -d "${TMPDIR:-/tmp}/evolucaochat-installer-run.XXXXXX")"
   rm -rf -- "$install_dir"
