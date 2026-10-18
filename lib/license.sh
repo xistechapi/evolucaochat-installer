@@ -191,19 +191,25 @@ validate_commercial_authorization() {
 request_commercial_authorization() {
   local installation_id="$1"
   local response_file="$2"
-  local payload
+  local payload http_status
 
   [[ "$DISTRIBUTION_BASE_URL" == 'https://downloads.evolucaochat.com.br' ]] ||
     license_error 'origem de distribuicao comercial invalida'
   register_secret "$LICENSE_KEY"
   payload="$(commercial_authorization_payload "$installation_id")"
-  curl --fail --silent --show-error \
+  if ! http_status="$(curl --fail --silent --show-error \
     --request POST \
     --header 'Content-Type: application/json' \
     --data "$payload" \
-    --output "$response_file" \
-    "$DISTRIBUTION_BASE_URL/v1/releases/authorize" ||
-    license_error 'autorizacao comercial recusada ou indisponivel'
+    --output "$response_file" --write-out '%{http_code}' \
+    "$DISTRIBUTION_BASE_URL/v1/releases/authorize")"; then
+    case "$http_status" in
+      401) license_error 'Chave de licenca invalida. Confira a chave recebida e tente novamente.' ;;
+      5??) license_error 'Central de downloads indisponivel. Tente novamente mais tarde.' ;;
+      000|'') license_error 'Nao foi possivel conectar a central de downloads. Confira a conexao da VPS e tente novamente.' ;;
+      *) license_error 'Nao foi possivel autorizar a instalacao. Confira os dados informados e tente novamente.' ;;
+    esac
+  fi
   validate_commercial_authorization "$response_file"
 }
 

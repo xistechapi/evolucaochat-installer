@@ -114,6 +114,17 @@ show_step_failure() {
   case "$name" in
     activation_and_download)
       guidance='Falha ao validar o acesso a versao. Confira o e-mail e a chave de licenca.'
+      # Only promote known local diagnostics, never arbitrary response content.
+      for line in \
+        'Chave de licenca invalida. Confira a chave recebida e tente novamente.' \
+        'Central de downloads indisponivel. Tente novamente mais tarde.' \
+        'Nao foi possivel conectar a central de downloads. Confira a conexao da VPS e tente novamente.' \
+        'Nao foi possivel autorizar a instalacao. Confira os dados informados e tente novamente.'; do
+        if [[ -f "$output_file" ]] && grep -Fxq "$line" "$output_file"; then
+          guidance="$line"
+          break
+        fi
+      done
       ;;
     dns)
       guidance='Confira se os tres dominios apontam para o IP desta VPS e tente novamente.'
